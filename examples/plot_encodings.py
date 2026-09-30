@@ -27,6 +27,7 @@ def main():
     parser.add_argument("--path", help="a local tgdata build directory, instead of loading --dataset by name")
     parser.add_argument("--window", type=int, default=4)
     parser.add_argument("--k", type=int, default=8)
+    parser.add_argument("--tol", type=float, default=1e-6)
     parser.add_argument("--nodes", type=int, nargs="+", help="node ids (default: the three most active)")
     parser.add_argument("--max-lag", type=int, default=30)
     parser.add_argument("--cache-dir", default=os.environ.get("PE_ZOO_CACHE"))
@@ -38,7 +39,7 @@ def main():
         raise SystemExit("set --cache-dir or PE_ZOO_CACHE")
 
     g = load_dir(args.path) if args.path else tgdata.load(args.dataset)
-    enc = pe_zoo.encode_windows(g, args.cache_dir, window=args.window, k=args.k, device=args.device)
+    enc = pe_zoo.encode_windows(g, args.cache_dir, window=args.window, k=args.k, tol=args.tol, device=args.device)
     if enc.is_static:
         raise SystemExit(f"{g.name} has a fixed topology: one encoding for every window, nothing to plot over time")
     pe, times = enc.array[:].astype(np.float32), np.arange(args.window - 1, g.num_steps)
@@ -46,7 +47,7 @@ def main():
     lags = np.arange(1, min(args.max_lag, len(pe) - 1) + 1)
     out = Path(args.out_dir) / g.name
     out.mkdir(parents=True, exist_ok=True)
-    tag = f"w{args.window}"
+    tag = f"w{args.window}_tol{args.tol:g}"
     figures = {
         "eigenvalues": plots.plot_eigenvalues(times, pe, title=f"{g.name}, window {args.window}"),
         "components": plots.plot_components(times, pe, nodes, title=f"{g.name}, window {args.window}"),
