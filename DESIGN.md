@@ -54,7 +54,7 @@ deterministic for a given `seed`. The trivial eigenpair (λ≈0) is kept, as j =
 - Simplicity rule: no options beyond the above, no fallbacks, no retries, no state between windows; each function is a few lines and does one thing.
 - `torch.lobpcg` needs a supra size well above `3k`; smaller problems raise a clear error (no dense fallback).
 
-## Cache (`src/pe_zoo/cache.py`, same pattern as `tsfm_zoo/embeddings.py`)
+## Cache and API (`src/pe_zoo/encodings.py`, same pattern as `tsfm_zoo/embeddings.py`)
 
 - Directory = first 16 hex chars of SHA-256 of the canonical JSON (`sort_keys`, compact separators) of:
   `dataset {name, tgdata version, num_nodes, num_steps, topology_sha256}`, `window`, `mu`, `norm`, `k`, `solver {name: lobpcg, tol, maxiter}`, `seed`,
@@ -62,14 +62,14 @@ deterministic for a given `seed`. The trivial eigenpair (λ≈0) is kept, as j =
   Excluded: device, batch size.
 - `topology_sha256` hashes `edge_index` and `edge_ptr` (edge_weight is ignored, so it is not hashed).
 - `config.json` (`{config, hash, shape, seconds, pe_zoo}`) sits beside `enc.npy`. A run writes `<hash>.partial<pid>/` and renames it; a finished cache is reused.
-- Storage `dtype`: `float16` default, `float32`, `bfloat16`. Test bounds the rounding error against float32. Solve is always float64.
+- Storage `dtype`: `float16` default, or `float32` (numpy has no bfloat16). Test bounds the rounding error against float32. Solve is always float64.
 - **Time-varying topology** (`edge_ptr` present): `enc.npy` is `[T-w+1, n, 2k]`.
 - **Fixed topology**: the topology is cloned `w` times, one window is solved, `enc.npy` is `[n, 2k]`, `config.kind = "static"`.
 
-## API (`src/pe_zoo/encodings.py`)
+## API
 
 ```python
-enc = pe_zoo.encode_windows(g, cache_dir, window=12, k=8, mu=1.0)   # PositionalEncodings (finished cache)
+enc = pe_zoo.encode_windows(g, cache_dir, window=12)   # PositionalEncodings (finished cache); k, mu, norm, tol, dtype, device optional
 enc.at(t)          # [n, 2k], window t-w+1..t
 enc.rows(task)     # [len(task), n, 2k] via task.window_starts (a broadcast view for a fixed topology)
 enc.array, enc.config
@@ -79,7 +79,7 @@ enc.array, enc.config
 
 ## Project
 
-- `~/pe-zoo`: `src/pe_zoo/{supra.py,cache.py,encodings.py,__init__.py}`, `tests/`, `docs/`, `.envrc`, `pyproject.toml` (hatchling), `uv.lock`, `DESIGN.md`, `AUDIT.md`.
+- `~/pe-zoo`: `src/pe_zoo/{supra.py,encodings.py,__init__.py}`, `tests/`, `docs/`, `.envrc`, `pyproject.toml` (hatchling), `uv.lock`, `DESIGN.md`, `AUDIT.md`.
 - `.envrc`: venv `/raid/f.decastelli/venvs/pe-zoo`, `UV_CACHE_DIR`, `PE_ZOO_CACHE=/raid/f.decastelli/pe-zoo-cache`, `TGDATA_ROOT=/raid/f.decastelli/tgdata_build/_hubcache2`.
 - Dependencies: `torch`, `numpy`; optional extra `tgdata` pinned to v0.3.0 (like tsfm-zoo); dev `pytest`. No scipy.
 - Tests: dense naive LaTeX reference vs each function (small graphs, tiny hand-made ones and a real dynamic-edge dataset from `TGDATA_ROOT`); the variational
