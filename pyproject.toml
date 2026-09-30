@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pe-zoo"
+version = "0.1.0"
+description = "Cached supra-Laplacian positional encodings of a sliding window of snapshots"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "torch>=2.10,<2.12",
+    "numpy",
+]
+
+[project.optional-dependencies]
+# Temporal-graph datasets (private repo, needs GitHub SSH access).
+tgdata = ["tgdata"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+tgdata = { git = "ssh://git@github.com/FabriDeCastelli/tgdata.git", tag = "v0.3.0", extra = "tgdata" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pe_zoo"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore:Sparse invariant checks"]
