@@ -86,6 +86,7 @@ enc.array, enc.config
 - Tests: dense naive LaTeX reference vs each function (small graphs, tiny hand-made ones and a real dynamic-edge dataset from `TGDATA_ROOT`); the variational
   objective; residual check; sign-invariant subspace comparison for repeated eigenvalues; cache hit/miss, key sensitivity (each field changes the hash, device/batch size do not),
   atomic rename, `at`/`rows` consistency, `window_starts == arange` check, the float16 error bound. Run after each change.
+- Plots (`src/pe_zoo/plots.py`, optional `plot` extra = matplotlib, lazy import): eigenvalues, components, one window, window similarity, lag curves; sign-invariant, like tsfm-zoo's diagnostics.
 - Docs in tgdata's README style: centred title, tagline, Install, "What you can do" (bold verb-led headings, one tiny code block each), "Learn more" → `docs/`.
 - Git: init `main`, remote `https://github.com/FabriDeCastelli/pe-zoo.git`. One commit per feature, messages describe the change only (no attribution lines), one annotated tag `v0.1.0`
   at the end. Push once the features are done and the tests pass.

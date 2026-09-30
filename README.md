@@ -7,10 +7,10 @@
 In a uv project (nothing is cloned into it; `uv.lock` pins the version):
 
 ```bash
-uv add "pe-zoo[tgdata] @ git+ssh://git@github.com/FabriDeCastelli/pe-zoo.git" --tag v0.1.0
+uv add "pe-zoo[tgdata,plot] @ git+ssh://git@github.com/FabriDeCastelli/pe-zoo.git" --tag v0.2.0
 ```
 
-With pip: `pip install "pe-zoo[tgdata] @ git+ssh://git@github.com/FabriDeCastelli/pe-zoo.git@v0.1.0"`.
+With pip: `pip install "pe-zoo[tgdata,plot] @ git+ssh://git@github.com/FabriDeCastelli/pe-zoo.git@v0.2.0"`.
 The `tgdata` extra installs [tgdata](https://github.com/FabriDeCastelli/tgdata) v0.3.0, which supplies the datasets.
 
 ## What you can do
@@ -52,8 +52,17 @@ phi = supra_pe([edges_t0, edges_t1, edges_t2], n=100, k=8, mu=1.0, norm="sym", t
 pe_zoo.encode_windows(g, "cache/", window=12, k=16, mu=0.5, norm="rw", tol=1e-8, dtype="float32", device=device)
 ```
 
+**Plot them** (eigenvalues, eigenvectors and window similarity over time; needs the `plot` extra)
+
+```python
+from pe_zoo import plots
+
+plots.plot_eigenvalues(times, enc.array[:])          # times: the last step of each window
+```
+
 ## Learn more
 
 - [The encoding](docs/encoding.md): the equations, where each lives in the code, and the deliberate deviations.
 - [Cache and lookup](docs/cache.md): what determines a cache directory, the `t` convention, fixed and time-varying topologies.
+- [Diagnostics](docs/diagnostics.md): the plots, and how to read them.
 - [Development](docs/development.md): setup, tests, GPUs.

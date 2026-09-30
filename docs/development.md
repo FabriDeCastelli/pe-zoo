@@ -2,7 +2,7 @@
 
 ```bash
 source .envrc            # venv in /raid/f.decastelli/venvs/pe-zoo, PE_ZOO_CACHE, TGDATA_ROOT
-uv sync --extra tgdata
+uv sync --extra tgdata --extra plot
 pytest
 ```
 
