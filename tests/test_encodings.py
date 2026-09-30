@@ -123,3 +123,16 @@ def test_bad_inputs(tmp_path):
         encode_windows(toy_graph(), tmp_path, window=W, dtype="bfloat16")
     with pytest.raises(ValueError, match="fewer than"):
         encode_windows(toy_graph(), tmp_path, window=T + 1)
+
+
+def test_real_dataset_pems08(tmp_path):
+    tgdata = pytest.importorskip("tgdata")
+    try:
+        g = tgdata.load("pems08")
+    except Exception as error:                                                    # not in TGDATA_ROOT
+        pytest.skip(str(error))
+    enc = encode_windows(g, tmp_path, window=12)
+    task = g.task(split="test")
+    rows = enc.rows(task)
+    assert enc.array.shape == (g.num_nodes, 16) and rows.shape == (len(task), g.num_nodes, 16)
+    assert np.isfinite(enc.array.astype(np.float32)).all() and np.allclose(np.linalg.norm(enc.array[:, :8].astype(np.float32), axis=0), 1, atol=1e-2)

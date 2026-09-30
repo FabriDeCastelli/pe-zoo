@@ -112,7 +112,7 @@ def encode_windows(g, cache_dir, *, window: int, k: int = 8, mu: float = 1.0, no
     start = time.time()
     for row in range(windows):
         edges = [g.edge_index] * window if g.is_static else [g.edges_at(step)[0] for step in range(row, row + window)]
-        edges = [torch.as_tensor(e, dtype=torch.long, device=device) for e in edges]
+        edges = [torch.tensor(e, dtype=torch.long, device=device) for e in edges]
         pe = supra.supra_pe(edges, g.num_nodes, k, mu, norm, tol, seed=supra.SEED + row)
         value = pe.cpu().numpy().astype(dtype)
         if g.is_static:
