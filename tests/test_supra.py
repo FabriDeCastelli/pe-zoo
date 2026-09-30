@@ -8,12 +8,12 @@ from pe_zoo import supra
 N, W, K, MU, TOL = 10, 3, 3, 0.7, 1e-8
 
 
-def random_layers(seed, n=N, w=W, inactive_last=(8, 9)):
-    """w random edge lists; the last snapshot leaves `inactive_last` without edges, one-way edges included."""
+def random_layers(seed, n=N, w=W, inactive_last=(8,), never=(9,)):
+    """w random edge lists, one-way edges included; `never` have no edge in any snapshot, `inactive_last` none in the last."""
     rng = np.random.default_rng(seed)
     layers = []
     for i in range(w):
-        allowed = [v for v in range(n) if i < w - 1 or v not in inactive_last]
+        allowed = [v for v in range(n) if v not in never and (i < w - 1 or v not in inactive_last)]
         pairs = [(a, b) for a in allowed for b in allowed if a != b and rng.random() < 0.3]
         pairs += [(allowed[0], allowed[1]), (allowed[1], allowed[2])]
         layers.append(torch.tensor(pairs, dtype=torch.long).T)
@@ -43,7 +43,8 @@ def naive_supra(adjs, mu):
 
 
 def naive_pe(layers, n, k, mu):
-    """Phi_p by dense eigh: build A_sup, drop the inactive copies, L = I - D^-1/2 A D^-1/2, last block, columns L2, [U || 1 lambda]."""
+    """Phi_p by dense eigh: build A_sup, drop the inactive copies, L = I - D^-1/2 A D^-1/2, then for each node the
+    row of its latest active snapshot, columns L2, [U || 1 lambda]."""
     adjs = [naive_layer(e, n) for e in layers]
     a = naive_supra(adjs, mu)
     m = n + 1
@@ -54,12 +55,14 @@ def naive_pe(layers, n, k, mu):
     lap = np.eye(len(d)) - a / np.sqrt(np.outer(d, d))
     lam, vec = np.linalg.eigh(lap)
     lam, vec = lam[:k], vec[:, :k]
-    rows = np.flatnonzero(keep)
-    last = [i for i, r in enumerate(rows) if (len(adjs) - 1) * m <= r < (len(adjs) - 1) * m + n]
+    position = {int(r): i for i, r in enumerate(np.flatnonzero(keep))}
     u = np.zeros((n, k))
-    nodes = rows[last] - (len(adjs) - 1) * m
-    block = vec[last]
-    u[nodes] = block / np.linalg.norm(block, axis=0)
+    for v in range(n):
+        for t in reversed(range(len(adjs))):                     # the latest snapshot where v is active
+            if t * m + v in position:
+                u[v] = vec[position[t * m + v]]
+                break
+    u = u / np.linalg.norm(u, axis=0)
     return np.concatenate([u, np.tile(lam, (n, 1))], axis=1)
 
 
@@ -111,12 +114,30 @@ def test_supra_pe_matches_dense_reference(seed):
     assert np.allclose(align_signs(got, ref), ref, atol=1e-5)
 
 
-def test_inactive_nodes_are_zero_and_columns_unit_norm():
+def test_inactive_nodes_take_their_latest_active_row_or_zero():
     layers = random_layers(1)
     pe = supra.supra_pe(layers, N, K, MU, "sym", TOL).numpy()
-    assert np.all(pe[[8, 9], :K] == 0)
+    assert np.all(pe[9, :K] == 0)                                  # never active
+    assert np.any(pe[8, :K] != 0)                                  # inactive in the last snapshot only: carried forward
     assert np.allclose(np.linalg.norm(pe[:, :K], axis=0), 1)
     assert np.allclose(pe[:, K:], pe[0, K:])                       # eigenvalues broadcast over nodes
+
+
+def test_carried_row_is_the_previous_snapshots_row():
+    """Node 8 is inactive only in the last snapshot: its output row is its row in snapshot W-2, scaled per column like every other row."""
+    layers = random_layers(2)
+    adjs = [supra.layer_adjacency(e, N) for e in layers]
+    keep = torch.stack([supra.active_nodes(a) for a in adjs])
+    laplacian, _ = supra.supra_laplacian(supra.restrict(supra.supra_adjacency(adjs, MU), keep.flatten()), "sym")
+    _, vectors = supra.smallest_eigenpairs(laplacian, None, K, TOL, supra.SEED)
+    blocks = vectors.split(keep.sum(1).tolist())
+
+    def raw(node, layer):
+        return blocks[layer][int(keep[layer, :node].sum())]
+
+    pe = supra.supra_pe(layers, N, K, MU, "sym", TOL)[:, :K]
+    scale = pe[0] / raw(0, W - 1)                                   # node 0 is active in the last snapshot
+    assert torch.allclose(pe[8], raw(8, W - 2) * scale, atol=1e-9)
 
 
 def test_lowest_eigenvalue_is_zero_and_spectrum_matches_dense():
@@ -128,7 +149,7 @@ def test_lowest_eigenvalue_is_zero_and_spectrum_matches_dense():
 @pytest.mark.parametrize("seed", range(3))
 def test_variational_objective_is_the_sum_of_the_eigenvalues(seed):
     """Eq. `supra_variational`: V = D^-1/2 U with V^T D V = I attains sum(lambda) over the k smallest."""
-    adjs = [naive_layer(e, N) for e in random_layers(seed, inactive_last=())]
+    adjs = [naive_layer(e, N) for e in random_layers(seed, inactive_last=(), never=())]
     a = naive_supra(adjs, MU)
     laplacian, _ = supra.supra_laplacian(torch.tensor(a).to_sparse(), "sym")
     lam, u = supra.smallest_eigenpairs(laplacian, None, K, TOL, 0)
@@ -167,7 +188,7 @@ def test_failure_raises():
 
 def test_lobpcg_finds_the_smallest_pairs_on_a_larger_window():
     n, k = 80, 8
-    layers = random_layers(7, n=n, w=4, inactive_last=(78, 79))
+    layers = random_layers(7, n=n, w=4, inactive_last=(78,), never=(79,))
     got = supra.supra_pe(layers, n, k, 1.0, "sym", 1e-6).numpy()
     ref = naive_pe(layers, n, k, 1.0)
     assert np.allclose(got[0, k:], ref[0, k:], atol=1e-6)

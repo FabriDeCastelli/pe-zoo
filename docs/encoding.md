@@ -27,9 +27,10 @@ variational objective (`VᵀDV = I`). `"combinatorial"` is `D − A`.
 1. **A global node per snapshot**, joined with weight 1 to the nodes that have an edge in that snapshot and coupled to
    its copies in adjacent snapshots by `μ` (as in [arXiv 2506.01596](https://arxiv.org/abs/2506.01596)). The global rows
    are not returned.
-2. **Inactive (node, snapshot) copies are removed** from the supra graph. A node with no edge in the last snapshot gets
-   zeros in the eigenvector half; its eigenvalue half is still `λ`.
-3. **Each eigenvector column is L2-normalised** over the returned block (the active nodes of the last snapshot). The
+2. **Inactive (node, snapshot) copies are removed** from the supra graph. A node with no edge in the last snapshot takes
+   its eigenvector row from the latest snapshot of the window where it has one, and zeros if there is none; its
+   eigenvalue half is always `λ`. The row depends on the window alone, never on earlier windows.
+3. **Each eigenvector column is L2-normalised** over the returned rows (the nodes active somewhere in the window). The
    solver's unit norm is over the whole supra vector.
 4. **The adjacency is binary and symmetric**: `A ← 1[A + Aᵀ > 0]`. `edge_weight` is ignored; self-loops are kept.
 

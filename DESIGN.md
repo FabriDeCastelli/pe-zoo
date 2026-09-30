@@ -32,9 +32,10 @@ If code and LaTeX disagree, stop and ask.
 1. **Global node** (paper arXiv 2506.01596v1): one per layer, joined with weight 1 to the *active* nodes of that layer, part of the vertex set
    (in D, and coupled across layers with μ, since the paper's B = I is over all of V). Supra size `(n_active + 1)·w`. Global rows are dropped
    from the output. TIDES leaves the global nodes uncoupled; that is an audit item.
-2. **Inactive (node, layer) copies are removed** (degree 0 in the symmetrised A_τ; a self-loop counts). They get no global edge. Their output row is
-   zeros in the eigenvector half; the eigenvalue half is still λ.
-3. **`scale = l2`**: each eigenvector column is L2-normalised over the returned slice (active nodes of the last layer, no global node).
+2. **Inactive (node, layer) copies are removed** (degree 0 in the symmetrised A_τ; a self-loop counts). They get no global edge. A node inactive in the
+   last layer takes its row from the **latest layer of the window where it is active** (a function of the window alone, so the cache stays order-independent);
+   zeros if there is none. The eigenvalue half is always λ.
+3. **`scale = l2`**: each eigenvector column is L2-normalised over the returned rows (the nodes active somewhere in the window, no global node).
    The LaTeX unit norm is over the whole supra vector; the literature (GraphGPS default, Dwivedi) uses L2 per eigenvector, no √n rescaling.
    Fixed, not an option; recorded in the key as a constant.
 4. **Binary weights** (see Conventions).

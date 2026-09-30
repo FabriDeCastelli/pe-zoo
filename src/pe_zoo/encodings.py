@@ -25,7 +25,8 @@ EVERY_WINDOW = {"split": None, "stride": 1, "horizon": 0}
 DTYPES = ("float32", "float16")
 # What the encoding is, beyond the parameters: constants of the implementation, hashed with them.
 METHOD = {"solver": "lobpcg", "maxiter": supra.MAXITER, "seed": supra.SEED, "sign": "solver", "scale": "l2",
-          "weights": "binary", "global_node": "per layer, coupled", "remove_inactive": True}
+          "weights": "binary", "global_node": "per layer, coupled", "remove_inactive": True,
+          "inactive_rows": "latest active row of the window, else zero"}
 
 
 def config_hash(config: dict) -> str:

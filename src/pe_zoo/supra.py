@@ -1,8 +1,9 @@
 """Supra-Laplacian positional encoding of one window of snapshots (one function per equation).
 
 Deviations from the LaTeX, all deliberate (DESIGN.md): a global node per layer joined to the active
-nodes of that layer (arXiv 2506.01596), inactive (node, layer) copies removed, binary symmetric
-adjacency, and each eigenvector column L2-normalised over the returned slice.
+nodes of that layer (arXiv 2506.01596), inactive (node, layer) copies removed (a node inactive in the last
+layer takes its latest active row of the window), binary symmetric adjacency, and each eigenvector column
+L2-normalised over the returned rows.
 """
 import torch
 
@@ -102,19 +103,19 @@ def supra_pe(edge_layers: list[torch.Tensor], n: int, k: int, mu: float, norm: s
     """Phi_p of a window, eq. `supra_pe_def`: [U_t || 1 lambda^T], float64 [n, 2k].
 
     `edge_layers` are the [2, E] edge indices of the w snapshots, oldest first; U_t is the block of the
-    last snapshot, without the global node. Nodes inactive in the last snapshot get zeros in U_t.
+    last snapshot, without the global node. A node inactive in the last snapshot takes its row from the
+    latest snapshot of the window where it is active, and zeros if there is none.
     """
     if len(edge_layers) < 2:
         raise ValueError("the window needs at least 2 snapshots")
     layers = [layer_adjacency(edges, n) for edges in edge_layers]
-    keep = torch.cat([active_nodes(layer) for layer in layers])
-    laplacian, b = supra_laplacian(restrict(supra_adjacency(layers, mu), keep), norm)
+    keep = torch.stack([active_nodes(layer) for layer in layers])                       # [w, n+1]
+    laplacian, b = supra_laplacian(restrict(supra_adjacency(layers, mu), keep.flatten()), norm)
     values, vectors = smallest_eigenpairs(laplacian, b, k, tol, seed)
-    active = keep[-(n + 1):-1]
-    start = int(keep[:-(n + 1)].sum())
-    last = vectors[start:start + int(active.sum())]
     u = torch.zeros(n, k, dtype=torch.float64, device=vectors.device)
-    u[active] = last / last.norm(dim=0)
+    for active, block in zip(keep[:, :-1], vectors.split(keep.sum(1).tolist())):
+        u[active] = block[:-1]                                                          # the global node is the last row
+    u = u / u.norm(dim=0)
     if not torch.isfinite(u).all():
-        raise RuntimeError("an eigenvector has no mass on the last snapshot, so it cannot be normalised")
+        raise RuntimeError("an eigenvector has no mass on the active nodes of the window, so it cannot be normalised")
     return torch.cat([u, values.expand(n, k)], dim=1)
