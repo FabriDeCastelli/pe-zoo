@@ -78,6 +78,12 @@ enc.array, enc.config
 
 `rows(task)` raises if `task.window != w` or the dataset name differs. `encode_windows` reads tgdata with `TGDATA_ROOT` and never downloads.
 
+## Laplacian baseline (`src/pe_zoo/lappe.py`)
+
+`laplacian_positional_encoding` is copied unchanged from graphdeeplearning/graphtransformer@654068c (a test pins its text). Around it: a DGL-graph stand-in,
+`lappe(edge_index, n, k)` on the symmetric binary adjacency (raises if `n <= k`), and `encode_snapshots` / `SnapshotEncodings` in `encodings.py`: per-snapshot
+`[T, n, k]` (or `[n, k]`), same hashed cache with `method` in the key; `rows(task)` reads the snapshot at `window_starts + window - 1`. Dependency added: `scipy`.
+
 ## Project
 
 - `~/pe-zoo`: `src/pe_zoo/{supra.py,encodings.py,__init__.py}`, `tests/`, `docs/`, `.envrc`, `pyproject.toml` (hatchling), `uv.lock`, `DESIGN.md`, `AUDIT.md`.

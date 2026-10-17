@@ -12,12 +12,17 @@ SEED = 0
 NORMS = ("sym", "rw", "combinatorial")
 
 
+def symmetric_edges(edge_index: torch.Tensor) -> torch.Tensor:
+    """The edges of `edge_index` [2, E] in both directions, each once: the binary symmetric adjacency."""
+    return torch.unique(torch.cat([edge_index, edge_index.flip(0)], dim=1), dim=1)
+
+
 def layer_adjacency(edge_index: torch.Tensor, n: int) -> torch.Tensor:
     """A_tau: binary symmetric adjacency of one snapshot plus a global node with index n, [n+1, n+1] sparse.
 
     The global node is joined to every node that has an edge in the snapshot (its active nodes).
     """
-    edges = torch.unique(torch.cat([edge_index, edge_index.flip(0)], dim=1), dim=1)
+    edges = symmetric_edges(edge_index)
     active = torch.unique(edges)
     glob = torch.full_like(active, n)
     edges = torch.cat([edges, torch.stack([active, glob]), torch.stack([glob, active])], dim=1)

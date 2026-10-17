@@ -7,10 +7,10 @@
 In a uv project (nothing is cloned into it; `uv.lock` pins the version):
 
 ```bash
-uv add "pe-zoo[tgdata,plot] @ git+ssh://git@github.com/FabriDeCastelli/pe-zoo.git" --tag v0.2.0
+uv add "pe-zoo[tgdata,plot] @ git+ssh://git@github.com/FabriDeCastelli/pe-zoo.git" --tag v0.3.0
 ```
 
-With pip: `pip install "pe-zoo[tgdata,plot] @ git+ssh://git@github.com/FabriDeCastelli/pe-zoo.git@v0.2.0"`.
+With pip: `pip install "pe-zoo[tgdata,plot] @ git+ssh://git@github.com/FabriDeCastelli/pe-zoo.git@v0.3.0"`.
 The `tgdata` extra installs [tgdata](https://github.com/FabriDeCastelli/tgdata) v0.3.0, which supplies the datasets.
 
 ## What you can do
@@ -52,6 +52,13 @@ phi = supra_pe([edges_t0, edges_t1, edges_t2], n=100, k=8, mu=1.0, norm="sym", t
 pe_zoo.encode_windows(g, "cache/", window=12, k=16, mu=0.5, norm="rw", tol=1e-8, dtype="float32", device=device)
 ```
 
+**Compare with plain Laplacian encodings** (Dwivedi & Bresson, per snapshot)
+
+```python
+base = pe_zoo.encode_snapshots(g, "cache/", k=8)
+base.rows(task).shape        # (samples, nodes, 8): the snapshot at the last step of each window
+```
+
 **Plot them** (eigenvalues, eigenvectors and window similarity over time; needs the `plot` extra)
 
 ```python
@@ -63,6 +70,7 @@ plots.plot_eigenvalues(times, enc.array[:])          # times: the last step of e
 ## Learn more
 
 - [The encoding](docs/encoding.md): the equations, where each lives in the code, and the deliberate deviations.
+- [Laplacian baseline](docs/lappe.md): the upstream code, what surrounds it, and what to expect from it.
 - [Cache and lookup](docs/cache.md): what determines a cache directory, the `t` convention, fixed and time-varying topologies.
 - [Diagnostics](docs/diagnostics.md): the plots, and how to read them.
 - [Development](docs/development.md): setup, tests, GPUs.
