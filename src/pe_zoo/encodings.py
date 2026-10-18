@@ -31,7 +31,8 @@ METHOD = {"solver": "lobpcg", "maxiter": supra.MAXITER, "seed": supra.SEED, "sig
 
 LAPPE_METHOD = {"function": "lappe.laplacian_positional_encoding",
                 "source": "graphdeeplearning/graphtransformer@654068c data/molecules.py",
-                "graph": "symmetric binary", "steps": "every"}
+                "graph": "symmetric binary", "steps": "every", "solved_on": "active nodes plus up to k isolated", "solver": "scipy.linalg.eigh, lowest k+1",
+                "inactive_rows": "zero"}
 
 
 def config_hash(config: dict) -> str:
@@ -143,7 +144,7 @@ class SnapshotEncodings(_Cache):
 
 
 def encode_snapshots(g, cache_dir, *, k: int = 8, dtype: str = "float16") -> SnapshotEncodings:
-    """Laplacian positional encodings (`lappe.lappe`, from Dwivedi & Bresson) of every snapshot of `g`, cached like `encode_windows`."""
+    """Laplacian positional encodings (`lappe.lappe_active`, from Dwivedi & Bresson) of every snapshot of `g`, cached like `encode_windows`."""
     config = {**_dataset_config(g, dtype), "k": k, "method": LAPPE_METHOD}
     path = Path(cache_dir) / config_hash(config)
     if (path / CONFIG_FILE).exists():
@@ -152,7 +153,7 @@ def encode_snapshots(g, cache_dir, *, k: int = 8, dtype: str = "float16") -> Sna
 
     def compute(row):
         edges = g.edge_index if g.is_static else g.edges_at(row)[0]
-        return lappe.lappe(torch.tensor(edges, dtype=torch.long), g.num_nodes, k).numpy()
+        return lappe.lappe_active(torch.tensor(edges, dtype=torch.long), g.num_nodes, k).numpy()
 
     rows = 1 if g.is_static else g.num_steps
     _build(path, config, (g.num_nodes, k) if g.is_static else (rows, g.num_nodes, k), compute)

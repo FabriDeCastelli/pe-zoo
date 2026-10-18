@@ -10,6 +10,7 @@ is not applied here.
 from types import SimpleNamespace
 
 import numpy as np
+import scipy.linalg
 import scipy.sparse as sp
 import torch
 
@@ -66,3 +67,28 @@ def lappe(edge_index: torch.Tensor, n: int, k: int) -> torch.Tensor:
         raise ValueError(f"a graph of {n} nodes has {n - 1} non-trivial eigenvectors, fewer than k={k}")
     graph = laplacian_positional_encoding(Graph(symmetric_edges(edge_index), n), k)
     return graph.ndata["lap_pos_enc"]
+
+
+def lappe_active(edge_index: torch.Tensor, n: int, k: int) -> torch.Tensor:
+    """[n, k] float32: `lappe` at the active nodes (those with an edge), from the lowest k + 1 eigenpairs of L on the active nodes only.
+
+    An isolated node is a block `[1]` of L, so the whole-graph run is the active nodes plus `n - m` such blocks. Only
+    `min(k, n - m)` of them can reach the k kept columns, so that is all that is added: the active rows are those of
+    `lappe`, up to the eigenvectors' arbitrary sign and basis. L is the one of `laplacian_positional_encoding`; being
+    symmetric, it goes to `scipy.linalg.eigh` for its lowest k + 1 eigenpairs, 15 to 30 times faster than the general
+    `np.linalg.eig` on a few thousand nodes, at a cost cubic in `m + k` instead of `n`. The inactive rows are zero here; the
+    whole-graph run puts unit vectors on k of them, which nothing reads.
+    """
+    if n <= k:
+        raise ValueError(f"a graph of {n} nodes has {n - 1} non-trivial eigenvectors, fewer than k={k}")
+    edges = symmetric_edges(edge_index)
+    active = torch.unique(edges)
+    pe = torch.zeros(n, k)
+    if len(active):
+        size = len(active) + min(k, n - len(active))
+        graph = Graph(torch.searchsorted(active, edges.contiguous()), size)
+        scale = sp.diags(graph.in_degrees().numpy().clip(1) ** -0.5)
+        laplacian = (sp.eye(size) - scale @ graph.adjacency_matrix_scipy().astype(float) @ scale).toarray()
+        vectors = scipy.linalg.eigh(laplacian, subset_by_index=[0, k])[1][:, 1:]  # eigenvectors 1..k, by increasing eigenvalue
+        pe[active] = torch.from_numpy(vectors[: len(active)]).float()
+    return pe

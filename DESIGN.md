@@ -83,6 +83,8 @@ enc.array, enc.config
 `laplacian_positional_encoding` is copied unchanged from graphdeeplearning/graphtransformer@654068c (a test pins its text). Around it: a DGL-graph stand-in,
 `lappe(edge_index, n, k)` on the symmetric binary adjacency (raises if `n <= k`), and `encode_snapshots` / `SnapshotEncodings` in `encodings.py`: per-snapshot
 `[T, n, k]` (or `[n, k]`), same hashed cache with `method` in the key; `rows(task)` reads the snapshot at `window_starts + window - 1`. Dependency added: `scipy`.
+`encode_snapshots` uses `lappe_active`: the same `L` on the active nodes plus up to `k` isolated ones, lowest `k + 1` eigenpairs with `scipy.linalg.eigh`; a test
+compares it with `lappe` (the active rows, up to sign and basis), and the inactive rows are zero.
 
 ## Project
 

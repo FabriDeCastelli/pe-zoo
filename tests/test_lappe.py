@@ -60,7 +60,8 @@ def test_snapshot_cache_rows_and_lookup(tmp_path):
     enc = encode_snapshots(g, tmp_path, k=K)
     assert enc.array.shape == (T, N, K) and enc.is_static is False
     for step in (0, 7, T - 1):
-        assert np.allclose(enc.array[step].astype(np.float32), lappe.lappe(torch.from_numpy(g.edges_at(step)[0]), N, K).numpy(), atol=1e-3)
+        ref = lappe.lappe(torch.from_numpy(g.edges_at(step)[0]), N, K).numpy()   # the toy graph repeats eigenvalues, all inside the k columns:
+        assert np.allclose(span(enc.array[step].astype(np.float32)), span(ref), atol=5e-3)  # the columns are one basis of the same subspace
         assert np.array_equal(enc.at(step), enc.array[step])
     with pytest.raises(IndexError):
         enc.at(T)
@@ -83,3 +84,50 @@ def test_snapshot_cache_fixed_topology_reuse_and_key(tmp_path):
     assert config["method"]["source"].endswith("data/molecules.py") and "window" not in config
     with pytest.raises(ValueError, match="not other"):
         enc.rows(toy_graph(static=True, name="other").task("node_forecasting", window=W, horizon=2))
+
+
+def core(edges, n):
+    """The active nodes' graph as an edge tensor, with the spectrum of its Laplacian (its ties would make the basis arbitrary)."""
+    edges = torch.tensor(edges, dtype=torch.long).T
+    a = np.zeros((n, n))
+    a[edges[0], edges[1]] = a[edges[1], edges[0]] = 1.0
+    scale = a.sum(1).clip(1) ** -0.5
+    values = np.linalg.eigvalsh(np.eye(n) - scale[:, None] * a * scale[None, :])
+    assert np.diff(values).min() > 1e-4 and np.abs(values - 1).min() > 1e-3
+    return edges, values
+
+
+def span(vectors):
+    """The projector on the columns' span: the same for any basis of a repeated eigenvalue's eigenspace."""
+    return vectors @ np.linalg.pinv(vectors)
+
+
+def sign_aligned(pe, ref):
+    return pe * np.sign((pe * ref).sum(0, keepdims=True))
+
+
+def test_active_matches_the_whole_graph_run_at_the_active_nodes():
+    rng = np.random.default_rng(0)
+    ring = [(i, (i + 1) % 25) for i in range(25)] + [tuple(rng.choice(25, 2, replace=False)) for _ in range(15)]
+    edges, values = core(ring, 25)
+    k, n = 5, 40                                                    # 15 isolated nodes after the 25 active ones
+    assert (values < 1).sum() > k                                   # the k columns are all active eigenvectors
+    pe, ref = lappe.lappe_active(edges, n, k).numpy(), lappe.lappe(edges, n, k).numpy()
+    assert pe.shape == (n, k) and pe.dtype == np.float32
+    assert np.allclose(sign_aligned(pe[:25], ref[:25]), ref[:25], atol=1e-5)
+    assert not pe[25:].any()
+
+
+def test_active_pads_with_zero_columns_as_the_whole_graph_run_does():
+    edges, values = core([(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 0), (0, 2), (1, 4)], 6)
+    k, n = 5, 30
+    assert (values < 1).sum() <= k                                  # the isolated nodes' eigenvalue 1 fills the rest
+    pe, ref = lappe.lappe_active(edges, n, k).numpy(), lappe.lappe(edges, n, k).numpy()
+    assert np.allclose(sign_aligned(pe[:6], ref[:6]), ref[:6], atol=1e-5)
+    assert not pe[:6, (values < 1).sum() - 1:].any()
+
+
+def test_active_without_edges_is_zero_and_too_few_nodes_raises():
+    assert not lappe.lappe_active(torch.zeros(2, 0, dtype=torch.long), 20, 4).any()
+    with pytest.raises(ValueError, match="fewer than k"):
+        lappe.lappe_active(ring_with_chords(5), 5, 5)

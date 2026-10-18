@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pe-zoo"
-version = "0.3.0"
+version = "0.4.0"
 description = "Cached supra-Laplacian positional encodings of a sliding window of snapshots"
 requires-python = ">=3.12,<3.13"
 dependencies = [
