@@ -131,3 +131,17 @@ def test_active_without_edges_is_zero_and_too_few_nodes_raises():
     assert not lappe.lappe_active(torch.zeros(2, 0, dtype=torch.long), 20, 4).any()
     with pytest.raises(ValueError, match="fewer than k"):
         lappe.lappe_active(ring_with_chords(5), 5, 5)
+
+
+def test_active_survives_a_snapshot_where_the_subset_drivers_fail():
+    """A snapshot of mint-drgn (108 active nodes, 20 components): scipy's `evr` and `evx` drivers raise on its Laplacian."""
+    edges = torch.from_numpy(np.load(Path(__file__).with_name("data") / "lappe_evr_failure_edges.npy"))
+    n, k = 300, 8
+    pe = lappe.lappe_active(edges, n, k).numpy()
+    assert pe.shape == (n, k) and np.isfinite(pe).all() and not pe[108:].any()
+    a = np.zeros((n, n))
+    a[edges[0], edges[1]] = a[edges[1], edges[0]] = 1.0
+    scale = a.sum(1).clip(1) ** -0.5
+    laplacian = np.eye(n) - scale[:, None] * a * scale[None, :]
+    assert np.allclose(laplacian @ pe, 0, atol=1e-6)                 # the 20 components make eigenvalue 0 repeated: all 8 columns are in its eigenspace
+    assert np.allclose(pe.T @ pe, np.eye(k), atol=1e-5)              # and orthonormal

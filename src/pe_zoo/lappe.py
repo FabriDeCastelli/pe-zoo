@@ -89,6 +89,9 @@ def lappe_active(edge_index: torch.Tensor, n: int, k: int) -> torch.Tensor:
         graph = Graph(torch.searchsorted(active, edges.contiguous()), size)
         scale = sp.diags(graph.in_degrees().numpy().clip(1) ** -0.5)
         laplacian = (sp.eye(size) - scale @ graph.adjacency_matrix_scipy().astype(float) @ scale).toarray()
-        vectors = scipy.linalg.eigh(laplacian, subset_by_index=[0, k])[1][:, 1:]  # eigenvectors 1..k, by increasing eigenvalue
+        try:
+            vectors = scipy.linalg.eigh(laplacian, subset_by_index=[0, k])[1][:, 1:]  # eigenvectors 1..k, by increasing eigenvalue
+        except np.linalg.LinAlgError:  # LAPACK's subset drivers fail on some matrices with many repeated eigenvalues (20 components)
+            vectors = scipy.linalg.eigh(laplacian, driver="evd")[1][:, 1 : k + 1]
         pe[active] = torch.from_numpy(vectors[: len(active)]).float()
     return pe

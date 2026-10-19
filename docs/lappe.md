@@ -50,6 +50,9 @@ the function and is not applied here.
   transfer network that has over 100,000 nodes, with `eigh` for the lowest `k + 1` pairs: on 6 threads 0.04 s at 1000
   nodes, 0.4 s at 3000, 5 s at 6000, 58 s at 12000, against 0.6 s, 12 s and more for `np.linalg.eig` at 1000 and 3000.
   A fixed topology is encoded once.
+- **Failure of LAPACK's subset drivers.** `lappe_active` asks `scipy.linalg.eigh` for the lowest `k + 1` pairs only. On some
+  snapshots with many repeated eigenvalues (a `mint-drgn` snapshot with 20 components) those drivers raise `LinAlgError`;
+  it then computes the full decomposition (`driver="evd"`) and keeps the same columns. A regression test holds that snapshot.
 - **Repeated eigenvalues** have an arbitrary basis, as for any eigendecomposition. This is the common case on a sparse
   snapshot: every connected component adds an eigenvalue 0, so the kept columns are a choice inside that eigenspace.
 - **`lappe_active` against `lappe`.** The Laplacian is block diagonal over the active nodes and the isolated ones, so both
