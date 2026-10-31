@@ -72,5 +72,6 @@ plots.plot_eigenvalues(times, enc.array[:])          # times: the last step of e
 - [The encoding](docs/encoding.md): the equations, where each lives in the code, and the deliberate deviations.
 - [Laplacian baseline](docs/lappe.md): the upstream code, what surrounds it, and what to expect from it.
 - [Cache and lookup](docs/cache.md): what determines a cache directory, the `t` convention, fixed and time-varying topologies.
+- [MiNT probe](docs/mint-probe.md): does Φ_p add to the edge count on MiNT? Protocol, eight configurations, result.
 - [Diagnostics](docs/diagnostics.md): the plots, and how to read them.
 - [Development](docs/development.md): setup, tests, GPUs.
