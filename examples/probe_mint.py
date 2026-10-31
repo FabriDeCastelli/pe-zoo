@@ -1,6 +1,7 @@
 """Does Φ_p add to the edge count on MiNT's Edge Growth/Shrink task? A linear probe on sign-free summaries of the cached encodings.
 
-    python examples/probe_mint.py --arm w8-k8-mu1.0-tol0.0001                    # the default configuration, cached by MOSAIC
+    python examples/probe_mint.py --arm w8-k8-mu1.0-tol0.0001                    # the default configuration, from MOSAIC's dense cache
+    python examples/probe_mint.py --features OUT --window 4 --k 8 --mu 1.0       # a configuration of probe_mint_features.py
 
 Screening protocol, fixed before any test network is touched: the probe is fit on the train splits of the chosen
 training networks (features standardised per network with its own train snapshots) and scored by AUC on their val
@@ -51,18 +52,35 @@ def topology_features(g, anchors):
     return np.array([[np.log(ptr[t + 1] - ptr[t]), np.log(len(np.unique(edges[:, ptr[t]:ptr[t + 1]])))] for t in anchors])
 
 
-def network_data(name, root, arm, window, k, lag):
+def load_summaries(directory, name, steps, k):
+    """[steps, 2k] summaries from the shards of probe_mint_features.py, NaN where a window was not computed or did not converge."""
+    x = np.full((steps, 2 * k), np.nan, dtype=np.float32)
+    shards = sorted(Path(directory).glob(f"{name}.shard*.npz"))
+    if not shards:
+        raise FileNotFoundError(f"no shards of {name} in {directory}")
+    for shard in shards:
+        z = np.load(shard)
+        x[z["anchors"]] = z["x"]
+    return x
+
+
+def network_data(name, root, arm, window, k, lag, features=None):
     """Per snapshot t: topology features, Φ_p summaries (t >= window - 1), and the train/val anchors with a full lag."""
     g = tgdata.load(name)
-    pe = PositionalEncodings(os.path.realpath(Path(root) / f"{name}__pe__{arm}"))
     steps = np.arange(g.num_steps)
     first = window - 1 + lag                                         # the first anchor whose lag window is complete
-    blocks = {"topology": topology_features(g, steps),
-              "phi_p": np.concatenate([np.full((window - 1, 2 * k), np.nan), phi_p_summaries(pe.array, np.arange(len(pe.array)), k)])}
+    if features:
+        phi = load_summaries(features, name, g.num_steps, k)
+    else:
+        pe = PositionalEncodings(os.path.realpath(Path(root) / f"{name}__pe__{arm}"))
+        phi = np.concatenate([np.full((window - 1, 2 * k), np.nan), phi_p_summaries(pe.array, np.arange(len(pe.array)), k)])
+    blocks = {"topology": topology_features(g, steps), "phi_p": phi}
     out = {"blocks": blocks}
     for split in ("train", "val"):
         anchors = np.asarray(g.task("graph_classification", target="edge_gs", window=1, split=split).anchors)
         anchors = anchors[anchors >= first]
+        if features:                                                 # the same samples for every feature set: those with a computed window
+            anchors = anchors[np.isfinite(phi[anchors]).all(1)]
         out[split] = {"anchors": anchors, "y": np.asarray(g.y["edge_gs"].values)[anchors].astype(int),
                       "minus_edges": -np.exp(blocks["topology"][anchors, 0])}
     return out
@@ -118,6 +136,8 @@ def main():
                         help="JSON list of mint-* names: 10 train networks with at least 280 snapshots, picked at evenly spaced quantiles of their median edges per snapshot")
     parser.add_argument("--root", default="/raid/f.decastelli/mosaic-cache/by-name")
     parser.add_argument("--arm", default="w8-k8-mu1.0-tol0.0001", help="the Φ_p cache suffix: w<w>-k<k>-mu<mu>-tol<tol>")
+    parser.add_argument("--features", help="a directory written by probe_mint_features.py (then --window, --k and --mu pick the configuration)")
+    parser.add_argument("--mu", type=float, default=1.0)
     parser.add_argument("--window", type=int, default=8)
     parser.add_argument("--k", type=int, default=8)
     parser.add_argument("--lag", type=int, default=0, help="0: levels only; L: also the change against the previous L snapshots")
@@ -127,7 +147,11 @@ def main():
     torch.manual_seed(args.seed)
     rng = np.random.default_rng(args.seed)
     names = json.load(open(args.networks))
-    data = {n: network_data(n, args.root, args.arm, args.window, args.k, args.lag) for n in names}
+    if args.features:
+        assert args.lag == 0, "the screen's anchors are strided: no lag features"
+        args.arm = f"w{args.window}-k{args.k}-mu{args.mu}"
+    directory = Path(args.features) / args.arm if args.features else None
+    data = {n: network_data(n, args.root, args.arm, args.window, args.k, args.lag, directory) for n in names}
     print(f"arm {args.arm}, lag {args.lag}: {len(names)} networks, train/val samples {sum(len(d['train']['y']) for d in data.values())}/{sum(len(d['val']['y']) for d in data.values())}")
     scores = {kind: {} for kind in FEATURES}
     for n, d in data.items():
